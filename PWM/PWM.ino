@@ -2,12 +2,12 @@
 #include <LCD.h>
 #include <LiquidCrystal_I2C.h>
 
+
 LiquidCrystal_I2C  lcd(0x27,2,1,0,4,5,6,7); // 0x27 is the I2C bus address for an unmodified backpack
 
-int val = 0;
+int val = 0; //used to get pwm duty cycle
 int achan = 0;
 int bchan = 0;
-
 
 void setup() {
   pinMode(5, OUTPUT);  //PWM signal output
@@ -15,6 +15,8 @@ void setup() {
   pinMode(2, INPUT);  //Input from Encoder Channel A
   pinMode(3, INPUT);  //Input from Encoder Channel B
   pinMode(8, OUTPUT); //Output to disable pin on Gate driver
+  
+  //setting the frequency to 31.25kHz by not setting a prescaler to Timer0
   TCCR0A = 0;
   TCCR0B = 0;
   TCCR0A |= (1 << WGM00) | (1 << COM0A1);
@@ -43,7 +45,9 @@ void setup() {
   // enable timer compare interrupt
   TIMSK1 |= (1 << OCIE1A);
 
+
   sei();//allow interrupts
+
 }
 
 double counter = 0; 
@@ -65,7 +69,6 @@ void loop() {
   lcd.print("      ");  //clearing
 
   }
-
 
 
  ISR(TIMER1_COMPA_vect){
