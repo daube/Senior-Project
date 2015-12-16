@@ -12,7 +12,7 @@ int Error = 0;
 int PIDspeed = 0;
 int OutputSignal = 0;
 int PrevSpeed = 0;
-int Integral = 0;
+double Integral = 0;
 int P = 0;
 int I = 0;
 int D = 0;
@@ -45,26 +45,14 @@ void setup() {
   TCCR1A = 0;// set entire TCCR1A register to 0
   TCCR1B = 0;// same for TCCR1B
   TCNT1  = 0;//initialize counter value to 0
-  // set compare match register for 1khz increments
-  OCR1A = 6249;// = (16*10^6) / (256*100) - 1 (must be <65536), interupt every 100 milisecond
+  // set compare match register for 40hz increments
+  OCR1A = 6249;// = (16*10^6) / (64*40) - 1 (must be <65536), interupt every 25 miliseconds
   // turn on CTC mode
   TCCR1B |= (1 << WGM12);
-  // Set CS10, CS11, and CS12 bits for 256 prescaler
-  TCCR1B |= (1 << CS12) | (0 << CS11) | (0 << CS10);  
+  // Set CS10, CS11, and CS12 bits for 64 prescaler
+  TCCR1B |= (0 << CS12) | (1 << CS11) | (1 << CS10);  
   // enable timer compare interrupt
   TIMSK1 |= (1 << OCIE1A);
-
-//  TCCR2A = 0;// set entire TCCR2A register to 0
-//  TCCR2B = 0;// same for TCCR2B
-//  TCNT2  = 0;//initialize counter value to 0
-//  // set compare match register for 1hz increments
-//  OCR2A = 124;// = (16*10^6) / (64*124) - 1 (must be <255), interupt every 1 milisecond
-//  // turn on CTC mode
-//  TCCR2B |= (1 << WGM22);
-//  // Set CS20, CS21, and CS22 bits for 64 prescaler
-//  TCCR2B |= (1 << CS22) | (0 << CS21) | (0 << CS20);   
-//  // enable timer compare interrupt
-//  TIMSK2 |= (1 << OCIE2A);
 
   sei();//allow interrupts
 
@@ -72,9 +60,9 @@ void setup() {
 
 double counter = 0; 
 double RPM = 0; 
-float kP = .01; //proportional constant
-float kI = 0; //integral constant
-float kD = 0; //derivative constant
+double kP = 0.73; //proportional constant
+double kI = 0.1; //integral constant
+double kD = 0; //derivative constant
 
 void loop() {
   desired = analogRead(A0); //desired speed of motor as judged by the POT, 1024 number
@@ -95,28 +83,28 @@ void loop() {
 
 //RPM determining function, PID as well
  ISR(TIMER1_COMPA_vect){
-   RPM = (counter/1440)*600; //divide the amount of up pulses by 1440(the ppr of the encoder) and mult by 600 to get in minutes, RPM
+   RPM = (counter/1440)*2400; //divide the amount of up pulses by 1440(the ppr of the encoder) and mult by 600 to get in minutes(its every .025), RPM
    //Serial.println(counter); //testing purposes
    counter = 0;
 
    //PID Function 
    Error = desired - RPM;
    Integral = Integral + Error;
-   P = abs(Error) * kP;
+   P = Error * kP;
    I = Integral * kI;
    D = (PrevSpeed - RPM) * kD;
-   PIDspeed = P + I + D; // Number should be in 0 - 1024
-//   if(PIDspeed > 1000) PIDspeed = 1000; // don't want the speed of the motor either having the PWM all on
-   if(PIDspeed < 0) PIDspeed = 0;  // Don't want something odd happening with a negative number
+   PIDspeed = P + I + D; // Number should be in 0 - 1024, Offset to account for how the circuit works
+     if(PIDspeed > 1000) PIDspeed = 1000; // don't want the speed of the motor either having the PWM all on
+     if(PIDspeed < 10) PIDspeed = 10;// Don't want something odd happening with a negative number
    PrevSpeed = RPM;
-   Serial.print(P);
-   Serial.print(",");
    Serial.print(desired);
    Serial.print(",");
    Serial.print(RPM);
    Serial.print(",");
+   Serial.print(Error);
+   Serial.print(",");
    Serial.println(PIDspeed);
-   
+  
    
   }
 
