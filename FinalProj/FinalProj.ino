@@ -16,6 +16,7 @@ double Integral = 0;
 int P = 0;
 int I = 0;
 int D = 0;
+int flag = 0;
 
 
 void setup() {
@@ -23,12 +24,13 @@ void setup() {
   pinMode(A0, INPUT);  //Input from POT to change PWM signal
   pinMode(2, INPUT);  //Input from Encoder Channel A
   pinMode(3, INPUT);  //Input from Encoder Channel B
+  pinMode(4, INPUT);  //Input from switch, set which code runs
   pinMode(8, OUTPUT); //Output to disable pin on Gate driver
   
   //setting the frequency to 31.25kHz by not setting a prescaler to Timer0
   TCCR0A = 0;
   TCCR0B = 0;
-  TCCR0A |= (1 << WGM00) | (1 << COM0A1); // a|=b > a= a|b bitwise OR
+  TCCR0A |= (1 << WGM00) | (1 << COM0A1);
   TCCR0B |= (1 << CS00);
   Serial.begin(9600);
 
@@ -54,6 +56,19 @@ void setup() {
   // enable timer compare interrupt
   TIMSK1 |= (1 << OCIE1A);
 
+//  TCCR1A = 0;// set entire TCCR1A register to 0
+//  TCCR1B = 0;// same for TCCR1B
+//  TCNT1  = 0;//initialize counter value to 0
+//  // set compare match register for 10hz increments
+//  OCR1A = 6249;// = (16*10^6) / (256*10) - 1 (must be <65536), interupt every 100 milisecond
+//  // turn on CTC mode
+//  TCCR1B |= (1 << WGM12);
+//  // Set CS10, CS11, and CS12 bits for 256 prescaler
+//  TCCR1B |= (1 << CS12) | (0 << CS11) | (0 << CS10);  
+//  // enable timer compare interrupt
+//  TIMSK1 |= (1 << OCIE1A);
+
+
   sei();//allow interrupts
 
 }
@@ -61,16 +76,25 @@ void setup() {
 double counter = 0; 
 double RPM = 0; 
 double kP = 0.73; //proportional constant
-double kI = 0.1; //integral constant
+double kI = 0.07; //integral constant
 double kD = 0; //derivative constant
 
 void loop() {
+  flag = digitalRead(4); // Reads the pin, either high or low
+ if(flag == HIGH){
+  desired = analogRead(A0);  //Divide by 4 because analogRead is 1024 but write is 256
+  achan = digitalRead(2); //read Channel A of Encoder
+  //bchan = digitalRead(3); //read Channel B of Encoder 
+  analogWrite(5, (desired/4)); //PWM signal (pin#, DutyCycle), Divide by 4 because analogRead is 1024 but write is 256
+  digitalWrite(8, LOW); //Output 0 to pin 8, when pin low, disable on gatedriver is not disabling the circuit, when disable is high it does
+ }
+ else{
   desired = analogRead(A0); //desired speed of motor as judged by the POT, 1024 number
   achan = digitalRead(2); //read Channel A of Encoder, actual speed of the motor in frequency
   //bchan = digitalRead(3); //read Channel B of Encoder 
   analogWrite(5, (PIDspeed/4)); //PWM signal (pin#, DutyCycle), Divide by 4 because analogRead is 1024 but write is 256
   digitalWrite(8, LOW); //Output 0 to pin 8, when pin low, disable on gatedriver is not disabling the circuit, when disable is high it does
-
+ }
   lcd.home (); // set cursor to 0,0
   lcd.print("Vibration Station"); 
   lcd.setCursor(0,1); //0 = start of lcd left side, 1 corresponds to second row
@@ -81,21 +105,29 @@ void loop() {
 
   }
 
-//RPM determining function, PID as well
+
  ISR(TIMER1_COMPA_vect){
-   RPM = (counter/1440)*2400; //divide the amount of up pulses by 1440(the ppr of the encoder) and mult by 600 to get in minutes(its every .025), RPM
+   if(flag == HIGH){
+    RPM = (counter/1440)*2400;
+   //Serial.println(counter);
+   counter = 0;
+   }
+   else{
+    RPM = (counter/1440)*2400; //divide the amount of up pulses by 1440(the ppr of the encoder) and mult by 600 to get in minutes(its every .025), RPM
    //Serial.println(counter); //testing purposes
    counter = 0;
 
    //PID Function 
    Error = desired - RPM;
-   Integral = Integral + Error;
+   //Integral = Integral + Error;
    P = Error * kP;
-   I = Integral * kI;
+   I = I + (kI * Error);
+   if(I > 1000) I = 0;
+   if(I < 0) I = 0;
    D = (PrevSpeed - RPM) * kD;
    PIDspeed = P + I + D + 512; // Number should be in 0 - 1024, Offset to account for how the circuit works
-     if(PIDspeed > 1000) PIDspeed = 1000; // don't want the speed of the motor either having the PWM all on
-     if(PIDspeed < 10) PIDspeed = 10;// Don't want something odd happening with a negative number
+   if(PIDspeed > 1000) PIDspeed = 1000; // don't want the speed of the motor either having the PWM all on
+   if(PIDspeed < 10) PIDspeed = 10;// Don't want something odd happening with a negative number
    PrevSpeed = RPM;
    Serial.print(desired);
    Serial.print(",");
@@ -104,13 +136,12 @@ void loop() {
    Serial.print(Error);
    Serial.print(",");
    Serial.println(PIDspeed);
-  
-   
+   }
   }
 
 
  void count(){
-  counter++;  //increment counter by 1 every time there is a high pulse from ChannelA of the encoder
+  counter++;
  }
  
 
